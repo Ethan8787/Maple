@@ -18,6 +18,7 @@ import org.bukkit.block.BlockState;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -39,7 +40,12 @@ public final class Maple extends JavaPlugin implements Listener, CommandExecutor
         if (config.getBoolean("claimed." + player.getUniqueId(), false)) {
             return;
         }
-        giveCompensationPackage(player);
+        Bukkit.getScheduler().runTaskLater(this, new Runnable() {
+            @Override
+            public void run() {
+                giveCompensationPackage(player);
+            }
+        }, 5); // 5 ticks later
         config.set("claimed." + player.getUniqueId(), true);
         saveConfig();
         player.sendMessage(ChatColor.AQUA + "補償 " + ChatColor.WHITE + "玩家 " + ChatColor.GOLD + player.getDisplayName() + ChatColor.WHITE + " 已領取補償裡包" + ChatColor.GRAY + "(請檢查背包)");
