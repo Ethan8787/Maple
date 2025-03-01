@@ -1,0 +1,5 @@
+name: Maple
+version: '1.0'
+main: ethan.maple.Maple
+api-version: '1.21'
+authors: [ Ethan ]
