@@ -37,17 +37,32 @@ public final class Maple extends JavaPlugin implements Listener, CommandExecutor
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         FileConfiguration config = this.getConfig();
+
+        // 檢查玩家是否已經領取過補償，若已領取則返回
         if (config.getBoolean("claimed." + player.getUniqueId(), false)) {
             return;
         }
+
+        // 檢查玩家背包是否有空間
+        if (player.getInventory().firstEmpty() == -1) {
+            // 背包已滿，顯示訊息並不記錄到 config
+            player.sendMessage(ChatColor.RED + "你的背包已滿，無法領取補償物品！");
+            return;
+        }
+
+        // 背包有空間，延遲給予補償包
         Bukkit.getScheduler().runTaskLater(this, new Runnable() {
             @Override
             public void run() {
                 giveCompensationPackage(player);
             }
-        }, 40); // 5 ticks later
+        }, 40); // 延遲 40 ticks（2 秒鐘）
+
+        // 設定補償狀態並儲存
         config.set("claimed." + player.getUniqueId(), true);
         saveConfig();
+
+        // 發送給玩家的訊息
         player.sendMessage(ChatColor.AQUA + "補償 " + ChatColor.WHITE + "玩家 " + ChatColor.GOLD + player.getDisplayName() + ChatColor.WHITE + " 已領取補償裡包" + ChatColor.GRAY + "(請檢查背包)");
     }
 
