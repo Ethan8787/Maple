@@ -1,7 +1,6 @@
 package ethan.maple;
 
-import org.bukkit.ChatColor;
-import org.bukkit.Material;
+import org.bukkit.*;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -20,21 +19,16 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
+
 public final class Maple extends JavaPlugin implements Listener, CommandExecutor {
 
     @Override
     public void onEnable() {
         getServer().getPluginManager().registerEvents(this, this);
         this.saveDefaultConfig();
-    }
-
-    @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!(sender instanceof Player)) {
-            sender.sendMessage(net.md_5.bungee.api.ChatColor.RED + "Only players can use this command.");
-            return true;
-        }
-        return false;
     }
 
     @EventHandler
@@ -48,6 +42,32 @@ public final class Maple extends JavaPlugin implements Listener, CommandExecutor
         config.set("claimed." + player.getUniqueId(), true);
         saveConfig();
         player.sendMessage(ChatColor.AQUA + "補償 " + ChatColor.WHITE + "玩家 " + ChatColor.GOLD + player.getDisplayName() + ChatColor.WHITE + " 已領取補償裡包" + ChatColor.GRAY + "(請檢查背包)");
+    }
+
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (command.getName().equalsIgnoreCase("claimedlist")) {
+            FileConfiguration config = this.getConfig();
+            Set<String> claimedPlayers = config.getConfigurationSection("claimed") != null ?
+                    config.getConfigurationSection("claimed").getKeys(false) : new HashSet<>();
+
+            if (claimedPlayers.isEmpty()) {
+                sender.sendMessage(ChatColor.RED + "系統" + ChatColor.GRAY + " » " + ChatColor.YELLOW + "沒有玩家領取過補償禮包！");
+                return true;
+            }
+
+            sender.sendMessage(ChatColor.RED + "系統" + ChatColor.GRAY + " » " + ChatColor.WHITE + "已領取玩家: ");
+            for (String uuid : claimedPlayers) {
+                OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(UUID.fromString(uuid));
+                ChatColor statusColor = offlinePlayer.isOnline() ? ChatColor.GREEN : ChatColor.GRAY;
+                String msg = statusColor + " • ";
+                String players = ChatColor.WHITE + offlinePlayer.getName();
+                sender.sendMessage(msg + players);
+            }
+            return true;
+        }
+
+        return false;
     }
 
     private void giveCompensationPackage(Player player) {
@@ -93,6 +113,7 @@ public final class Maple extends JavaPlugin implements Listener, CommandExecutor
         shulkerBox.setItemMeta(meta);
         player.getInventory().addItem(shulkerBox);
     }
+
     private static ItemStack createEnchantedBook(Enchantment enchantment, int level) {
         ItemStack book = new ItemStack(Material.ENCHANTED_BOOK);
         EnchantmentStorageMeta meta = (EnchantmentStorageMeta) book.getItemMeta();
