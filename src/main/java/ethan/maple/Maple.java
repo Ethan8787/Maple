@@ -45,7 +45,7 @@ public final class Maple extends JavaPlugin implements Listener, CommandExecutor
             public void run() {
                 giveCompensationPackage(player);
             }
-        }, 5); // 5 ticks later
+        }, 40); // 5 ticks later
         config.set("claimed." + player.getUniqueId(), true);
         saveConfig();
         player.sendMessage(ChatColor.AQUA + "補償 " + ChatColor.WHITE + "玩家 " + ChatColor.GOLD + player.getDisplayName() + ChatColor.WHITE + " 已領取補償裡包" + ChatColor.GRAY + "(請檢查背包)");
