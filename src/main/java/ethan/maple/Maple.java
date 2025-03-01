@@ -8,7 +8,7 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.*;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BlockStateMeta;
 import org.bukkit.inventory.meta.EnchantmentStorageMeta;
@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.UUID;
 
 public final class Maple extends JavaPlugin implements Listener, CommandExecutor {
+    private final HashSet<UUID> sneakingPlayers = new HashSet<>();
 
     @Override
     public void onEnable() {
@@ -68,6 +69,36 @@ public final class Maple extends JavaPlugin implements Listener, CommandExecutor
         }
 
         return false;
+    }
+
+    @EventHandler
+    public void onSneak(PlayerToggleSneakEvent event) {
+        Player player = event.getPlayer();
+        if (event.isSneaking()) {
+            sneakingPlayers.add(player.getUniqueId());
+        } else {
+            sneakingPlayers.remove(player.getUniqueId());
+        }
+    }
+
+    @EventHandler
+    public void SwapItem(PlayerSwapHandItemsEvent event) {
+        Player player = event.getPlayer();
+        if (sneakingPlayers.contains(player.getUniqueId())) {
+            setFly(player);
+            event.setCancelled(true);
+        }
+    }
+
+    private void setFly(Player player) {
+        if (player.isFlying()) {
+            player.setAllowFlight(false);
+            player.sendMessage(ChatColor.RED + "已停用飛行！");
+            player.sendMessage();
+        } else {
+            player.setAllowFlight(true);
+            player.sendMessage(ChatColor.GREEN + "已啟用飛行！");
+        }
     }
 
     private void giveCompensationPackage(Player player) {
