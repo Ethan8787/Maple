@@ -93,11 +93,11 @@ public final class Maple extends JavaPlugin implements Listener, CommandExecutor
     private void setFly(Player player) {
         if (player.isFlying()) {
             player.setAllowFlight(false);
-            player.sendMessage(ChatColor.RED + "已停用飛行！");
+            player.sendMessage(ChatColor.RED + "已停用飛行！ ");
             player.sendMessage();
         } else {
             player.setAllowFlight(true);
-            player.sendMessage(ChatColor.GREEN + "已啟用飛行！");
+            player.sendMessage(ChatColor.GREEN + "已啟用飛行！ ");
         }
     }
 
