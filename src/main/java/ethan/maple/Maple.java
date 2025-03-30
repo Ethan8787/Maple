@@ -8,6 +8,8 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.*;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BlockStateMeta;
@@ -17,15 +19,17 @@ import org.bukkit.block.ShulkerBox;
 import org.bukkit.block.BlockState;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.enchantments.Enchantment;
+import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitRunnable;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
 public final class Maple extends JavaPlugin implements Listener, CommandExecutor {
     private final HashSet<UUID> sneakingPlayers = new HashSet<>();
+    private final HashMap<UUID, Location> playerLocations = new HashMap<>();
 
     @Override
     public void onEnable() {
@@ -33,38 +37,39 @@ public final class Maple extends JavaPlugin implements Listener, CommandExecutor
         this.saveDefaultConfig();
     }
 
+    @Override
+    public void onDisable() {
+        sneakingPlayers.clear();
+    }
+
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         FileConfiguration config = this.getConfig();
 
-        // 檢查玩家是否已經領取過補償，若已領取則返回
         if (config.getBoolean("claimed." + player.getUniqueId(), false)) {
             return;
         }
 
-        // 檢查玩家背包是否有空間
         if (player.getInventory().firstEmpty() == -1) {
-            // 背包已滿，顯示訊息並不記錄到 config
             player.sendMessage(ChatColor.RED + "你的背包已滿，無法領取補償物品！");
             return;
         }
 
-        // 背包有空間，延遲給予補償包
         Bukkit.getScheduler().runTaskLater(this, new Runnable() {
             @Override
             public void run() {
                 giveCompensationPackage(player);
             }
-        }, 40); // 延遲 40 ticks（2 秒鐘）
+        }, 40);
 
-        // 設定補償狀態並儲存
         config.set("claimed." + player.getUniqueId(), true);
         saveConfig();
 
-        // 發送給玩家的訊息
         player.sendMessage(ChatColor.AQUA + "補償 " + ChatColor.WHITE + "玩家 " + ChatColor.GOLD + player.getDisplayName() + ChatColor.WHITE + " 已領取補償裡包" + ChatColor.GRAY + "(請檢查背包)");
     }
+
+
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
@@ -74,11 +79,11 @@ public final class Maple extends JavaPlugin implements Listener, CommandExecutor
                     config.getConfigurationSection("claimed").getKeys(false) : new HashSet<>();
 
             if (claimedPlayers.isEmpty()) {
-                sender.sendMessage(ChatColor.RED + "系統" + ChatColor.GRAY + " » " + ChatColor.YELLOW + "沒有玩家領取過補償禮包！");
+                sender.sendMessage(ChatColor.AQUA + "補償 " + ChatColor.YELLOW + "沒有玩家領取過補償禮包！");
                 return true;
             }
 
-            sender.sendMessage(ChatColor.RED + "系統" + ChatColor.GRAY + " » " + ChatColor.WHITE + "已領取玩家: ");
+            sender.sendMessage(ChatColor.AQUA + "補償 " + ChatColor.WHITE + "已領取玩家: ");
             for (String uuid : claimedPlayers) {
                 OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(UUID.fromString(uuid));
                 ChatColor statusColor = offlinePlayer.isOnline() ? ChatColor.GREEN : ChatColor.GRAY;
@@ -93,6 +98,38 @@ public final class Maple extends JavaPlugin implements Listener, CommandExecutor
     }
 
     @EventHandler
+    public void onSwapHand(PlayerSwapHandItemsEvent event) {
+        Player player = event.getPlayer();
+        UUID uuid = player.getUniqueId();
+
+        if (sneakingPlayers.contains(uuid)) {
+            event.setCancelled(true);
+            openCustomGUI(player);
+        }
+    }
+
+    private void openCustomGUI(Player player) {
+        Inventory gui = Bukkit.createInventory(null, InventoryType.CHEST, "自訂GUI");
+
+        ItemStack item = new ItemStack(Material.DIAMOND);
+        gui.setItem(2, item);
+
+        player.openInventory(gui);
+    }
+
+    @EventHandler
+    public void onInventoryClick(InventoryClickEvent event) {
+        if (event.getView().getTitle().equals("自訂GUI")) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        removePlayerLocation(event.getPlayer());
+    }
+
+    @EventHandler
     public void onSneak(PlayerToggleSneakEvent event) {
         Player player = event.getPlayer();
         if (event.isSneaking()) {
@@ -103,22 +140,58 @@ public final class Maple extends JavaPlugin implements Listener, CommandExecutor
     }
 
     @EventHandler
-    public void SwapItem(PlayerSwapHandItemsEvent event) {
+    public void onDropItem(PlayerDropItemEvent event) {
         Player player = event.getPlayer();
+
+        if (player.getGameMode() == GameMode.SPECTATOR) {
+            return;
+        }
         if (sneakingPlayers.contains(player.getUniqueId())) {
-            setFly(player);
+            playerLocations.put(player.getUniqueId(), player.getLocation());
+            setSpectator(player);
+            event.setCancelled(true);
+
+            player.setMetadata("dropItem", new FixedMetadataValue(this, true));
+            Bukkit.getScheduler().runTaskLater(this, () -> {
+                player.removeMetadata("dropItem", this);
+            }, 1L);
+        }
+    }
+
+    public Location getPlayerLocation(Player player) {
+        return playerLocations.get(player.getUniqueId());
+    }
+
+    public void removePlayerLocation(Player player) {
+        playerLocations.remove(player.getUniqueId());
+    }
+
+    @EventHandler
+    public void onPlayerInteract(PlayerInteractEvent event) {
+        Player player = event.getPlayer();
+
+        if (player.hasMetadata("dropItem")) {
+            return;
+        }
+
+        if (player.getGameMode() != GameMode.SPECTATOR) {
+            return;
+        }
+
+        if (sneakingPlayers.contains(player.getUniqueId())) {
+            player.teleport(getPlayerLocation(player));
+            setSpectator(player);
             event.setCancelled(true);
         }
     }
 
-    private void setFly(Player player) {
-        if (player.isFlying()) {
-            player.setAllowFlight(false);
-            player.sendMessage(ChatColor.RED + "已停用飛行！ ");
-            player.sendMessage();
+    private void setSpectator(Player player) {
+        if (!(player.getGameMode() == GameMode.SURVIVAL)) {
+            player.setGameMode(GameMode.SURVIVAL);
+            player.sendMessage(ChatColor.WHITE + "靈魂出竅" + ChatColor.GRAY +  " ▶ " + ChatColor.RED + "Off");
         } else {
-            player.setAllowFlight(true);
-            player.sendMessage(ChatColor.GREEN + "已啟用飛行！ ");
+            player.setGameMode(GameMode.SPECTATOR);
+            player.sendMessage(ChatColor.WHITE + "靈魂出竅" + ChatColor.GRAY +  " ▶ " + ChatColor.GREEN + "On");
         }
     }
 
@@ -170,7 +243,7 @@ public final class Maple extends JavaPlugin implements Listener, CommandExecutor
         ItemStack book = new ItemStack(Material.ENCHANTED_BOOK);
         EnchantmentStorageMeta meta = (EnchantmentStorageMeta) book.getItemMeta();
         if (meta != null) {
-            meta.addStoredEnchant(enchantment, level, true); // 使用 addStoredEnchant 而非 addEnchant
+            meta.addStoredEnchant(enchantment, level, true);
             book.setItemMeta(meta);
         }
         return book;
