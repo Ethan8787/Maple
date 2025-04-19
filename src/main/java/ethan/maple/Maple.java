@@ -11,6 +11,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.*;
+import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BlockStateMeta;
 import org.bukkit.inventory.meta.EnchantmentStorageMeta;
@@ -19,13 +20,11 @@ import org.bukkit.block.ShulkerBox;
 import org.bukkit.block.BlockState;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.enchantments.Enchantment;
+import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 public final class Maple extends JavaPlugin implements Listener, CommandExecutor {
     private final HashSet<UUID> sneakingPlayers = new HashSet<>();
@@ -76,7 +75,7 @@ public final class Maple extends JavaPlugin implements Listener, CommandExecutor
         if (command.getName().equalsIgnoreCase("claimedlist")) {
             FileConfiguration config = this.getConfig();
             Set<String> claimedPlayers = config.getConfigurationSection("claimed") != null ?
-                    config.getConfigurationSection("claimed").getKeys(false) : new HashSet<>();
+                    Objects.requireNonNull(config.getConfigurationSection("claimed")).getKeys(false) : new HashSet<>();
 
             if (claimedPlayers.isEmpty()) {
                 sender.sendMessage(ChatColor.AQUA + "補償 " + ChatColor.YELLOW + "沒有玩家領取過補償禮包！");
@@ -109,20 +108,106 @@ public final class Maple extends JavaPlugin implements Listener, CommandExecutor
     }
 
     private void openCustomGUI(Player player) {
-        Inventory gui = Bukkit.createInventory(null, InventoryType.CHEST, "自訂GUI");
+        Inventory menu = Bukkit.createInventory(null, InventoryType.CHEST, "選單");
 
-        ItemStack item = new ItemStack(Material.DIAMOND);
-        gui.setItem(2, item);
+        ItemStack enderChest = new ItemStack(Material.ENDER_CHEST);
+        ItemMeta ecMeta = enderChest.getItemMeta();
+        assert ecMeta != null;
+        ecMeta.setDisplayName("§7打開終界箱");
+        enderChest.setItemMeta(ecMeta);
+        menu.setItem(10, enderChest);
 
-        player.openInventory(gui);
+        ItemStack shop = new ItemStack(Material.GRASS_BLOCK);
+        ItemMeta shopMeta = shop.getItemMeta();
+        assert shopMeta != null;
+        shopMeta.setDisplayName("§a商城");
+        shop.setItemMeta(shopMeta);
+        menu.setItem(11, shop);
+
+        ItemStack cmdTutorial = new ItemStack(Material.COMMAND_BLOCK);
+        ItemMeta cmdMeta = cmdTutorial.getItemMeta();
+        assert cmdMeta != null;
+        cmdMeta.setDisplayName("§c指令教學");
+        cmdTutorial.setItemMeta(cmdMeta);
+        menu.setItem(12, cmdTutorial);
+
+        ItemStack helper = new ItemStack(Material.CHEST);
+        ItemMeta helperMeta = helper.getItemMeta();
+        assert helperMeta != null;
+        helperMeta.setDisplayName("§e輔助");
+        helper.setItemMeta(helperMeta);
+        menu.setItem(13, helper);
+
+        ItemStack tool = new ItemStack(Material.IRON_AXE);
+        ItemMeta toolMeta = tool.getItemMeta();
+        assert toolMeta != null;
+        toolMeta.setDisplayName("§d小工具");
+        toolMeta.addEnchant(Enchantment.MENDING, 1, true);
+        toolMeta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+        tool.setItemMeta(toolMeta);
+        menu.setItem(14, tool);
+
+        ItemStack playerInfo = new ItemStack(Material.PLAYER_HEAD);
+        SkullMeta skullMeta = (SkullMeta) playerInfo.getItemMeta();
+        assert skullMeta != null;
+        skullMeta.setDisplayName("§b玩家資訊");
+        skullMeta.setOwnerProfile(player.getPlayerProfile());
+        skullMeta.setLore(List.of("§a(圖標用每個人自己的頭顱)"));
+        playerInfo.setItemMeta(skullMeta);
+        menu.setItem(15, playerInfo);
+
+        ItemStack portal = new ItemStack(Material.END_PORTAL_FRAME);
+        ItemMeta portalMeta = portal.getItemMeta();
+        assert portalMeta != null;
+        portalMeta.setDisplayName("§6傳送點選單");
+        portal.setItemMeta(portalMeta);
+        menu.setItem(16, portal);
+
+        player.openInventory(menu);
     }
 
     @EventHandler
-    public void onInventoryClick(InventoryClickEvent event) {
-        if (event.getView().getTitle().equals("自訂GUI")) {
-            event.setCancelled(true);
+    public void onMenuClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+
+        Inventory inv = event.getInventory();
+        if (!event.getView().getTitle().equals("選單")) return;
+
+        event.setCancelled(true);
+
+        ItemStack clickedItem = event.getCurrentItem();
+        if (clickedItem == null || !clickedItem.hasItemMeta()) return;
+
+        String displayName = ChatColor.stripColor(Objects.requireNonNull(clickedItem.getItemMeta()).getDisplayName());
+
+        switch (displayName) {
+            case "打開終界箱":
+                player.openInventory(player.getEnderChest());
+                break;
+
+            case "商城":
+                break;
+
+            case "指令教學":
+                player.sendMessage("");
+                break;
+
+            case "輔助":
+                break;
+
+            case "小工具":
+                break;
+
+            case "玩家資訊":
+                break;
+
+            case "傳送點選單":
+                break;
+            default:
+                break;
         }
     }
+
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
@@ -201,8 +286,7 @@ public final class Maple extends JavaPlugin implements Listener, CommandExecutor
         if (meta == null) return;
         meta.setDisplayName("§6楓葉補償禮包");
         BlockState state = meta.getBlockState();
-        if (state instanceof ShulkerBox) {
-            ShulkerBox box = (ShulkerBox) state;
+        if (state instanceof ShulkerBox box) {
             Inventory inv = box.getInventory();
 
             inv.setItem(0, createEnchantedBook(Enchantment.SILK_TOUCH, 1));
